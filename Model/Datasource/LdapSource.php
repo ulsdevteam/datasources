@@ -304,7 +304,7 @@ class LdapSource extends DataSource {
  * @return boolean the connection status
  */
 	public function disconnect() {
-		ldap_free_result($this->results);
+		ldap_free_result($this->_result);
 		ldap_unbind($this->database);
 		$this->connected = false;
 		return $this->connected;
@@ -798,13 +798,13 @@ class LdapSource extends DataSource {
  */
 	protected function _getLDAPschema() {
 		$schemaTypes = array('objectclasses', 'attributetypes');
-		$this->results = ldap_read($this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
-		if ($this->results === null) {
+		$this->_result = ldap_read($this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
+		if ($this->_result === null) {
 			$this->log( "LDAP schema filter {$this->SchemaFilter} is invalid!", 'ldap.error');
 			return array();
 		}
 
-		$schemaEntries = ldap_get_entries($this->database, $this->results);
+		$schemaEntries = ldap_get_entries($this->database, $this->_result);
 		if (!$schemaEntries) {
 			return array();
 		}
