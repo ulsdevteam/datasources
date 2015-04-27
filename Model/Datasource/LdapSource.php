@@ -669,7 +669,7 @@ class LdapSource extends DataSource {
 
 		switch ($type) {
 			case 'hasOne':
-				$id = $resultSet[$model->name][$model->primaryKey];
+				$id = $resultSet[$model->name][isset($assocData['alternateKey']) ? $assocData['alternateKey'] : $model->primaryKey];
 				$queryData['conditions'] = trim($assocData['foreignKey']) . '=' . trim($id);
 				$queryData['targetDn'] = $linkModel->useTable;
 				$queryData['type'] = 'search';
@@ -679,7 +679,7 @@ class LdapSource extends DataSource {
 
 			case 'belongsTo':
 				$id = $resultSet[$model->name][$assocData['foreignKey']];
-				$queryData['conditions'] = trim($linkModel->primaryKey) . '=' . trim($id);
+				$queryData['conditions'] = trim(isset($assocData['alternateKey']) ? $assocData['alternateKey'] : $linkModel->primaryKey) . '=' . trim($id);
 				$queryData['targetDn'] = $linkModel->useTable;
 				$queryData['type'] = 'search';
 				$queryData['limit'] = 1;
@@ -687,7 +687,7 @@ class LdapSource extends DataSource {
 				return $queryData;
 
 			case 'hasMany':
-				$id = $resultSet[$model->name][$model->primaryKey];
+				$id = $resultSet[$model->name][isset($assocData['alternateKey']) ? $assocData['alternateKey'] : $model->primaryKey];
 				$queryData['conditions'] = trim($assocData['foreignKey']) . '=' . trim($id);
 				$queryData['targetDn'] = $linkModel->useTable;
 				$queryData['type'] = 'search';
