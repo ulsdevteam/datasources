@@ -445,7 +445,7 @@ class LdapSource extends DataSource {
 		}
 
 		// Prepare query data ------------------------
-		$queryData['conditions'] = $this->_conditions($queryData['conditions'], $model);
+		$queryData['conditions'] = $this->_conditionsArrayToString($queryData['conditions'], $model);
 		if (empty($queryData['targetDn'])) {
 			$queryData['targetDn'] = $model->useTable;
 		}
@@ -1078,57 +1078,13 @@ class LdapSource extends DataSource {
 	}
 
 /**
- * Filter conditions to remove SQL-like naming conventions
- * 
- * @param mixed $conditions Array or string
- * @param Model $model
- * @return string
- */
-	protected function _conditions($conditions, $model) {
-		$res = '';
-		$key = $model->primaryKey;
-		$name = $model->name;
-
-		if (is_array($conditions) && count($conditions) === 1) {
-			$sqlHack = "$name.$key";
-			$conditions = str_ireplace($sqlHack, $key, $conditions);
-			$k = array_pop(array_keys($conditions));
-			$v = $conditions[$k];
-			if (is_string($v)) {
-				if ($k === $name . '.dn') {
-					$res = substr($v, 0, strpos($v, ','));
-				} elseif (($k === $sqlHack) && (empty($v) || $v === '*')) {
-					$res = $model->primaryKey.'=*';
-				} elseif ($k === $sqlHack) {
-					$res = "$key=$v";
-				} else {
-					$res = "$k=$v";
-				}
-				$conditions = $res;
-			}
-		}
-
-		if (is_array($conditions)) {
-			// Conditions expressed as an array
-			$conditions = $this->_conditionsArrayToString($conditions);
-		}
-
-		if (empty($conditions)) {
-			$res = $model->primaryKey.'=*';
-		} else {
-			$res = $conditions;
-		}
-		return $res;
-	}
-
-/**
  * Convert an array into a ldap condition string
  *
  * @param array $conditions Condition
  * @param string $join The type of opeation to use to join the conditions (&, |, !)
  * @return string
  */
-	protected function _conditionsArrayToString($conditions, $join = '&') {
+	protected function _conditionsArrayToString($conditions, $model, $join = '&') {
 		if (is_array($conditions)) {
 			// Process array of conditions
 			$ret_parts = array();
@@ -1138,44 +1094,48 @@ class LdapSource extends DataSource {
 					case 'OR':
 						if (is_array($v)) {
 							// the children of this condition will be processed with an OR join
-							$ret_parts[] = $this->_conditionsArrayToString($v, '|');
+							$ret_parts[] = $this->_conditionsArrayToString($v, $model, '|');
 						} else {
 							// Single OR condition?  This is probably an error.
-							$ret_parts[] = $this->_conditionsArrayToString($v);
+							$ret_parts[] = $this->_conditionsArrayToString($v, $model);
 						}
 						break;
 					case 'NOT':
 						// the childern of this condition will be processed with a NOT join
-						$ret_parts[] = $this->_conditionsArrayToString($v, '!');
+						$ret_parts[] = $this->_conditionsArrayToString($v, $model, '!');
 						break;
 					case 'AND':
 						// the children of this condition will be processed with an AND join (default)
-						$ret_parts[] = $this->_conditionsArrayToString($v);
+						$ret_parts[] = $this->_conditionsArrayToString($v, $model);
 						break;
 					default:
 						// This is an array, but not an explicitly named boolean operation
 						if (is_numeric($k)) {
 							// numeric keys indicate a default AND
-							$ret_parts[] = $this->_conditionsArrayToString($v);
-						} else if (strpos($k, '!=')) {
-							// A not equals must be converted to a NOT condition
-							$ret_parts[] = '(!('.rtrim(substr($k, 0, strpos($k, '!='))).'='.$v.'))';
-						} else if (preg_match('/([<>~]=)$/', $k, $op)) {
-							// A lexical greater-than/less-than/approximately can be passed directly
-							$ret_parts[] = '('.$k.$v.')';
-						} else if (is_array($v)) {
-							// An array of values is an IN statement.  This must be converted to an OR join
-							$r = '(|';
-							foreach ($v as $i) {
-									$r .= '('.$k.'='.$i.')';
-							}
-							$ret_parts[] = $r.')';
-						} else if ($v === NULL) {
-							// A check for NULL must be converted to a NOT any match
-							$ret_parts[] = '(!('.$k.'=*))';
+							$ret_parts[] = $this->_conditionsArrayToString($v, $model);
 						} else {
-							// A single key-value pair is an equality check
-							$ret_parts[] = '('.$k.'='.$v.')';
+							// Remove SQL-like naming from keys
+							$k = str_ireplace($model->name.'.', '', $k);
+							if (strpos($k, '!=')) {
+								// A not equals must be converted to a NOT condition
+								$ret_parts[] = '(!('.rtrim(substr($k, 0, strpos($k, '!='))).'='.$v.'))';
+							} else if (preg_match('/([<>~]=)$/', $k, $op)) {
+								// A lexical greater-than/less-than/approximately can be passed directly
+								$ret_parts[] = '('.$k.$v.')';
+							} else if (is_array($v)) {
+								// An array of values is an IN statement.  This must be converted to an OR join
+								$r = '(|';
+								foreach ($v as $i) {
+										$r .= '('.$k.'='.$i.')';
+								}
+								$ret_parts[] = $r.')';
+							} else if ($v === NULL) {
+								// A check for NULL must be converted to a NOT any match
+								$ret_parts[] = '(!('.$k.'=*))';
+							} else {
+								// A single key-value pair is an equality check
+								$ret_parts[] = '('.$k.'='.$v.')';
+							}
 						}
 				}
 			}
@@ -1186,6 +1146,8 @@ class LdapSource extends DataSource {
 			// Otherwise paste the parts together with the join
 			return '('.$join.implode('', $ret_parts).')';
 		} else {
+			// Remove SQL-like naming from keys
+			$conditions = str_ireplace($model->name.'.', '', $conditions);
 			// Ensure string condition has leading and trailing parenthesis
 			return strpos($conditions, '(') === 0 ? (string) $conditions : '('.$conditions.')';
 		}
