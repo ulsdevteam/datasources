@@ -728,6 +728,11 @@ class LdapSource extends DataSource {
 			return null;
 		}
 
+		// Particularly with a DboSource count query, we may be trying to get an association where no association exists in the resultSet
+		if (!isset($resultSet[0][$model->name])) {
+			return null;
+		}
+
 		$count = count($resultSet);
 		for ($i = 0; $i < $count; $i++) {
 			$row = $resultSet[$i];
