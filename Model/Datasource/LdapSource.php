@@ -304,7 +304,9 @@ class LdapSource extends DataSource {
  * @return bool The connection status
  */
 	public function disconnect() {
-		ldap_free_result($this->_result);
+		if ($this->_result && is_resource($this->_result)) {
+			ldap_free_result($this->_result);
+		}
 		ldap_unbind($this->database);
 		$this->connected = false;
 		return $this->connected;
